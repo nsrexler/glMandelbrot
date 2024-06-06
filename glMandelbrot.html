@@ -7,7 +7,7 @@
         <script type="text/javascript">
             "use strict";
 
-            const SCALING_FACTOR = window.devicePixelRatio * 4;
+            const SCALING_FACTOR = window.devicePixelRatio;
 
             window.addEventListener("load", () => {
                 const canvas = document.querySelector("canvas");
@@ -40,18 +40,32 @@
 
                 const zoomFactor = 2.0;
 
+                let zoomHistory = [];
+
+                const zoomOut = document.querySelector("button.zoomOut");
+
                 canvas.addEventListener("click", (evt) => {
                     if(pickMode) return;
+                    zoomHistory.push({originX, originY, viewWidth});
                     const {x, y} = getRealCoords(evt);
                     const newWidth = viewWidth / zoomFactor;
                     originX = Math.min(Math.max(x - (newWidth / 2.0), originX), originX + viewWidth - newWidth);
                     originY = Math.min(Math.max(y - (newWidth / 2.0), originY), originY + viewWidth - newWidth);
                     viewWidth = newWidth;
+                    zoomOut.disabled = false;
+                    setHash();
+                    draw();
+                });
+
+                zoomOut.addEventListener("click", () => {
+                    ({originX, originY, viewWidth} = zoomHistory.pop());
+                    if(zoomHistory.length === 0 ) zoomOut.disabled = true;
                     setHash();
                     draw();
                 });
 
                 document.querySelector("button.resetView").addEventListener("click", () => {
+                    zoomOut.disabled = true;
                     originX = -2.0;
                     originY = -2.0;
                     viewWidth = 4.0;
@@ -319,6 +333,7 @@
         <canvas width="800" height="800" style="border: 1px solid black; cursor: zoom-in;"></canvas>
         <canvas class="juliaPreview" hidden width="300" height="300" style="border: 1px solid black"></canvas>
         <div class="controls">
+            <button class="zoomOut" disabled>Zoom Out</button>
             <button class="resetView">Reset Zoom</button>
             <button class="pickJulia">Pick Julia</button>
         </div>
