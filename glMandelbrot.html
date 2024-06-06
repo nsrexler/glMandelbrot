@@ -8,9 +8,10 @@
             "use strict";
 
             const SCALING_FACTOR = window.devicePixelRatio;
+            let drawFn = drawFractal;
 
             window.addEventListener("load", () => {
-                const canvas = document.querySelector("canvas");
+                let canvas = document.querySelector("canvas");
                 if (SCALING_FACTOR !== 1) {
                     canvas.style.width = canvas.width + "px";
                     canvas.style.height = canvas.height + "px";
@@ -37,6 +38,47 @@
                 }
 
                 let pickMode = false;
+                let juliaClick = null;
+                let juliaMove = null;
+
+                const juliaBtn = document.querySelector("button.pickJulia");
+                if(!juliaMode) {
+                    const juliaPreview = document.querySelector("canvas.juliaPreview");
+                    if (SCALING_FACTOR !== 1) {
+                        juliaPreview.style.width = juliaPreview.width + "px";
+                        juliaPreview.style.height = juliaPreview.height + "px";
+                        juliaPreview.width *= SCALING_FACTOR;
+                        juliaPreview.height *= SCALING_FACTOR;
+                    }
+                    const prev = canvas.style.cursor;
+                    document.querySelector("button.pickJulia").addEventListener("click", () => {
+                        pickMode = true;
+                        canvas.style.cursor = "crosshair";
+                        juliaPreview.hidden = false;
+                    });
+                    juliaClick = (evt) => {
+                        if(!pickMode) return;
+                        const {x, y} = getRealCoords(evt);
+                        pickMode = false;
+                        juliaPreview.hidden = true;
+                        canvas.style.cursor = prev;
+                        window.open(`#juliaMode=true&x=${x}&y=${y}`);
+                    };
+                    document.addEventListener("keydown", (evt) => {
+                        if(!pickMode || evt.key !== "Escape") return;
+                        pickMode = false;
+                        juliaPreview.hidden = true;
+                        canvas.style.cursor = prev;
+                    });
+                    juliaMove = (evt) => {
+                        if(!pickMode) return;
+                        const {x, y} = getRealCoords(evt);
+                        drawFractal(juliaPreview, -2, -2, 4, true, x, y);
+                    };
+                }
+                else {
+                    juliaBtn.hidden = true;
+                }
 
                 const zoomFactor = 2.0;
 
@@ -44,18 +86,24 @@
 
                 const zoomOut = document.querySelector("button.zoomOut");
 
-                canvas.addEventListener("click", (evt) => {
-                    if(pickMode) return;
-                    zoomHistory.push({originX, originY, viewWidth});
-                    const {x, y} = getRealCoords(evt);
-                    const newWidth = viewWidth / zoomFactor;
-                    originX = Math.min(Math.max(x - (newWidth / 2.0), originX), originX + viewWidth - newWidth);
-                    originY = Math.min(Math.max(y - (newWidth / 2.0), originY), originY + viewWidth - newWidth);
-                    viewWidth = newWidth;
-                    zoomOut.disabled = false;
-                    setHash();
-                    draw();
-                });
+                function initCanvasEvents() {
+                    canvas.addEventListener("click", (evt) => {
+                        if(pickMode) return;
+                        zoomHistory.push({originX, originY, viewWidth});
+                        const {x, y} = getRealCoords(evt);
+                        const newWidth = viewWidth / zoomFactor;
+                        originX = Math.min(Math.max(x - (newWidth / 2.0), originX), originX + viewWidth - newWidth);
+                        originY = Math.min(Math.max(y - (newWidth / 2.0), originY), originY + viewWidth - newWidth);
+                        viewWidth = newWidth;
+                        zoomOut.disabled = false;
+                        setHash();
+                        draw();
+                    });
+                    if(juliaClick) canvas.addEventListener("click", juliaClick);
+                    if(juliaMove) canvas.addEventListener("mousemove", juliaMove);
+                }
+
+                initCanvasEvents();
 
                 zoomOut.addEventListener("click", () => {
                     ({originX, originY, viewWidth} = zoomHistory.pop());
@@ -73,44 +121,15 @@
                     draw();
                 });
 
-                const juliaBtn = document.querySelector("button.pickJulia");
-                if(!juliaMode) {
-                    const juliaPreview = document.querySelector("canvas.juliaPreview");
-                    if (SCALING_FACTOR !== 1) {
-                        juliaPreview.style.width = juliaPreview.width + "px";
-                        juliaPreview.style.height = juliaPreview.height + "px";
-                        juliaPreview.width *= SCALING_FACTOR;
-                        juliaPreview.height *= SCALING_FACTOR;
-                    }
-                    const prev = canvas.style.cursor;
-                    document.querySelector("button.pickJulia").addEventListener("click", () => {
-                        pickMode = true;
-                        canvas.style.cursor = "crosshair";
-                        juliaPreview.hidden = false;
-                    });
-                    canvas.addEventListener("click", (evt) => {
-                        if(!pickMode) return;
-                        const {x, y} = getRealCoords(evt);
-                        pickMode = false;
-                        juliaPreview.hidden = true;
-                        canvas.style.cursor = prev;
-                        window.open(`#juliaMode=true&x=${x}&y=${y}`);
-                    });
-                    document.addEventListener("keydown", (evt) => {
-                        if(!pickMode || evt.key !== "Escape") return;
-                        pickMode = false;
-                        juliaPreview.hidden = true;
-                        canvas.style.cursor = prev;
-                    });
-                    canvas.addEventListener("mousemove", (evt) => {
-                        if(!pickMode) return;
-                        const {x, y} = getRealCoords(evt);
-                        drawFractal(juliaPreview, -2, -2, 4, true, x, y);
-                    });
-                }
-                else {
-                    juliaBtn.hidden = true;
-                }
+                const cpuMode = document.querySelector("input.cpuMode");
+                cpuMode.addEventListener("change", () => {
+                    drawFn = cpuMode.checked ? drawFractalParallel : drawFractal;
+                    const newCanvas = canvas.cloneNode(false);
+                    canvas.parentNode.replaceChild(newCanvas, canvas);
+                    canvas = newCanvas;
+                    initCanvasEvents();
+                    draw();
+                });
 
                 function setHash() {
                     const hashParams = new URLSearchParams();
@@ -135,7 +154,7 @@
                 }
 
                 function draw() {
-                    drawFractal(canvas, originX, originY, viewWidth, juliaMode, juliaX, juliaY);
+                    drawFn(canvas, originX, originY, viewWidth, juliaMode, juliaX, juliaY);
                 }
 
                 draw();
@@ -336,6 +355,9 @@
             <button class="zoomOut" disabled>Zoom Out</button>
             <button class="resetView">Reset Zoom</button>
             <button class="pickJulia">Pick Julia</button>
+            <label>
+                <input type="checkbox" class="cpuMode" /> CPU Mode
+            </label>
         </div>
     </body>
 </html>
